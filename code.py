@@ -29,5 +29,37 @@ plt.title("Top 20 Power Consumption at speed")
 
 plt.xticks()
 
+plt.savefig("Top power consumption at speed.png",dpi=300)
+
 plt.grid()
 plt.show()
+# For Power consumption vs Road Gradient
+plt.figure(figsize=(8,6))
+plt.scatter(df['road_gradient'], df['power_consumption'])
+plt.xlabel("Road Gradient (%)")
+plt.ylabel("Power Consumption")
+plt.title("Effect of Road Gradient on Power Consumption")
+plt.savefig("Power consumption at road gradient.png",dpi=300)
+plt.show()
+
+# top power consumption by driving style
+print(df['driving_style'])
+
+plt.figure(figsize=(8,6))
+df.groupby('driving_style')['power_consumption'].max().plot(kind='bar',color=["r","g","k"])
+plt.xlabel("Driving Style")
+plt.ylabel("Max Power Consumption")
+plt.title("Maximum Power Consumption by Driving Style")
+plt.savefig("power consumption by driving style.png",dpi=300)
+plt.show()
+
+# traffic density impact on Range
+print(df['traffic_density'])
+plt.figure(figsize=(8,6))
+df.groupby('traffic_density')['remaining_range'].mean().plot(kind='bar')
+plt.xlabel("Traffic Density")
+plt.ylabel("Average Remaining Range")
+plt.title("Traffic Density vs Remaining Range")
+plt.savefig("Range impact by traffic density.png",dpi=300)
+plt.show()
+
