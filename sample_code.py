@@ -6,5 +6,5 @@ df=pd.read_csv(r"EV_Range_Prediction_Dataset_2000.csv")
 
 print(df.head(10))
 
-f=df['timestamp'].head(5)
-print(f)
+# f=df['timestamp'].head(5)
+# print(f)
