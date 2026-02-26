@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 df=pd.read_csv(r"EV_Range_Prediction_Dataset_2000.csv")
 
@@ -18,21 +19,14 @@ plt.ylabel('remainig_range')
 plt.savefig("soc vs remaining range.png",dpi=300)
 plt.show()
 
-# now for power consumption
+# now for power consumption(with regression line)
 
 plt.figure(figsize=(8,6))
-top_power=df.sort_values('power_consumption',ascending=False).head(20)
-plt.scatter(top_power['speed'],top_power['power_consumption'],color="k",marker="o")
-plt.xlabel("speed")
-plt.ylabel("Power consumption")
-plt.title("Top 20 Power Consumption at speed")
-
-plt.xticks()
-
-plt.savefig("Top power consumption at speed.png",dpi=300)
-
-plt.grid()
+sns.regplot(x='speed', y='power_consumption', data=df)
+plt.title("Speed vs Power Consumption (Regression Line)")
+plt.savefig("Speed vs Power Consumption",dpi=300)
 plt.show()
+
 # For Power consumption vs Road Gradient
 plt.figure(figsize=(8,6))
 plt.scatter(df['road_gradient'], df['power_consumption'])
@@ -100,5 +94,58 @@ plt.ylabel("Average Remaining Range")
 plt.title("Traffic Density vs Remaining Range")
 plt.savefig("Traffic density impact")
 plt.show()
+
+# soc vs power consumption
+# it will show how discharge increases under load,LOW SoC vs high load will give insufficient operation
+plt.figure(figsize=(8,6))
+plt.scatter(df['battery_soc'], df['power_consumption'])
+plt.xlabel("Battery SOC (%)")
+plt.ylabel("Power Consumption")
+plt.title("Battery SOC vs Power Consumption")
+plt.savefig("Battery SOC vs Power Consumption")
+plt.show()
+
+# driving behaviour comparisons
+# aggresive driving will lead to high energy demand
+
+plt.figure(figsize=(8,6))
+df.groupby('driving_style')['power_consumption'].mean().plot(kind='bar')
+plt.ylabel("Average Power Consumption")
+plt.title("Driving Style vs Avg Power Consumption")
+plt.savefig("Driving Style vs Avg Power Consumption")
+plt.show()
+
+# corelation heatmap
+# this will show strongest factor affecting remaining range and hidden relationships
+import seaborn as sns
+
+plt.figure(figsize=(10,8))
+sns.heatmap(df.corr(numeric_only=True), annot=True)
+plt.title("Feature Correlation Heatmap")
+plt.savefig("Feature Correlation Heatmap")
+plt.show()
+
+# pairplot
+# this will show all relation together,which features most affect range
+sns.pairplot(df[['battery_soc', 'speed', 'power_consumption',
+                 'battery_health', 'remaining_range']])
+plt.title("most affect range")
+plt.savefig("most affect range")
+
+plt.show()
+
+# heatmap
+# this will predict strongest range and hidden relationships
+plt.figure(figsize=(10,8))
+sns.heatmap(df.corr(numeric_only=True), annot=True, cmap='coolwarm')
+plt.title("Feature Correlation Heatmap")
+plt.savefig("Feature Correlation Heatmap")
+plt.show()
+
+
+
+
+
+
 
 
