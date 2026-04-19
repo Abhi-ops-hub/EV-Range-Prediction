@@ -199,7 +199,6 @@ print("Model Performance:")
 print("MAE:", mae)
 print("R2 Score:", r2)
 
-print(data.corr(numeric_only=True)['remaining_range'].sort_values(ascending=False))
 
 
 
