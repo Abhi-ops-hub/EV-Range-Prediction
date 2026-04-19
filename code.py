@@ -143,6 +143,64 @@ plt.savefig("Feature Correlation Heatmap")
 plt.show()
 
 
+# MACHINE LEARNING MODEL
+
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.ensemble import RandomForestRegressor
+
+# Copy dataframe
+data = df.copy()
+
+# Encode categorical columns
+le_driving = LabelEncoder()
+le_traffic = LabelEncoder()
+
+data['driving_style'] = le_driving.fit_transform(data['driving_style'])
+data['traffic_density'] = le_traffic.fit_transform(data['traffic_density'])
+
+# Feature selection
+features = [
+    'battery_soc',
+    'speed',
+    'power_consumption',
+    'battery_health',
+    'road_gradient',
+    'temperature',
+    'regen_braking',
+    'driving_style',
+    'traffic_density'
+]
+
+X = data[features]
+y = data['remaining_range']
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# Model (you can also try LinearRegression, XGBoost, etc.)
+model = RandomForestRegressor(n_estimators=100, random_state=42)
+
+# Train
+model.fit(X_train, y_train)
+
+# Predict
+y_pred = model.predict(X_test)
+
+# Evaluation
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print("Model Performance:")
+print("MAE:", mae)
+print("R2 Score:", r2)
+
+print(data.corr(numeric_only=True)['remaining_range'].sort_values(ascending=False))
+
 
 
 
