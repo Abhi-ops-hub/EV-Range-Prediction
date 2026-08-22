@@ -130,17 +130,17 @@ p, div, span, label { color: #e0e8ff !important; }
     background: linear-gradient(135deg, rgba(0,255,157,0.08), rgba(0,200,255,0.05));
     border: 2px solid #00ff9d;
     border-radius: 16px;
-    padding: 2rem;
+    padding: 1.8rem;
     text-align: center;
-    margin: 1rem 0;
-    box-shadow: 0 0 40px rgba(0,255,157,0.15);
+    margin-bottom: 1.2rem;
+    box-shadow: 0 0 30px rgba(0,255,157,0.12);
     animation: fadeIn 0.4s ease;
 }
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
 }
-.result-km { font-family: 'Orbitron', monospace; font-size: 4rem; font-weight: 900; color: #00ff9d; line-height: 1; }
+.result-km { font-family: 'Orbitron', monospace; font-size: 3.8rem; font-weight: 900; color: #00ff9d; line-height: 1; }
 .result-label { font-size: 0.85rem; letter-spacing: 0.2em; color: #7a9bbf !important; margin-top: 0.5rem; text-transform: uppercase; }
 
 /* ── Chart Card ── */
@@ -195,23 +195,28 @@ input[type="number"], .stSelectbox > div > div {
     border-radius: 10px !important;
 }
 
-/* ── Predict Button ── */
+/* ── Predict Button (Simple, highlighted design) ── */
 .stButton > button {
     font-family: 'Orbitron', monospace !important;
     font-size: 0.85rem !important;
     letter-spacing: 0.15em !important;
-    background: linear-gradient(90deg, #00c8ff, #00ff9d) !important;
-    color: #0a0f1e !important;
-    border: none !important;
+    background: #0d223a !important;
+    color: #00c8ff !important;
+    border: 1.5px solid #00c8ff !important;
     border-radius: 8px !important;
     padding: 0.85rem 2rem !important;
     font-weight: 700 !important;
     width: 100% !important;
-    box-shadow: 0 4px 20px rgba(0,200,255,0.3) !important;
-    transition: opacity 0.2s ease, transform 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(0, 200, 255, 0.15) !important;
+    transition: all 0.2s ease !important;
     cursor: pointer !important;
 }
-.stButton > button:hover { opacity: 0.88 !important; transform: translateY(-1px) !important; }
+.stButton > button:hover {
+    background: linear-gradient(90deg, #00c8ff, #00ff9d) !important;
+    color: #0a0f1e !important;
+    border-color: transparent !important;
+    box-shadow: 0 4px 14px rgba(0, 200, 255, 0.25) !important;
+}
 
 .stDataFrame, iframe { border-radius: 10px !important; }
 hr { border-color: rgba(0,200,255,0.1) !important; }
@@ -244,7 +249,6 @@ def load_and_train():
 
 model, driving_styles, traffic_densities, importances, df_raw = load_and_train()
 
-# Image helper with safety check
 def safe_show_image(filename):
     if os.path.exists(filename):
         st.image(filename, use_container_width=True)
@@ -319,29 +323,58 @@ with tab_predictor:
         st.markdown("<br>", unsafe_allow_html=True)
         predict_btn = st.button("⚡ CALCULATE REMAINING RANGE")
 
-    with right:
-        st.markdown('<div class="section-label">📊 Feature Importance</div>', unsafe_allow_html=True)
-        sorted_imp = sorted(importances.items(), key=lambda x: x[1], reverse=True)
-        imp_df = pd.DataFrame(sorted_imp, columns=["Feature", "Importance"])
-        imp_df["Feature"] = imp_df["Feature"].str.replace("_", " ").str.title()
-        
-        # Native Streamlit column config - avoids Jinja2/Styler errors
-        st.dataframe(
-            imp_df,
-            column_config={
-                "Importance": st.column_config.ProgressColumn(
-                    "Importance",
-                    format="%.4f",
-                    min_value=0.0,
-                    max_value=float(imp_df["Importance"].max()),
-                ),
-            },
-            use_container_width=True,
-            hide_index=True,
-            height=320,
-        )
+    # ── Calculation logic ──
+    if predict_btn:
+        ds = driving_styles.index(driving_style)
+        td = traffic_densities.index(traffic_density)
+        feat_input = np.array([[battery_soc, speed, power_consumption, battery_health,
+                                 road_gradient, temperature, regen_braking, ds, td]])
+        prediction = model.predict(feat_input)[0]
 
-        st.markdown('<div class="section-label" style="margin-top:1rem;">🟢 Live Condition Check</div>', unsafe_allow_html=True)
+        insights = []
+        if battery_soc < 20:                          insights.append("🔴 Low SoC — please charge soon.")
+        if power_consumption > 30:                    insights.append("⚠️ High power draw is reducing range.")
+        if temperature < 5:                           insights.append("🥶 Cold temperature reduces battery efficiency.")
+        if road_gradient > 10:                        insights.append("⛰️ Steep gradient is consuming more energy.")
+        if driving_style.strip().lower() == "aggressive": insights.append("🏎️ Aggressive driving drains battery faster.")
+        if regen_braking > 10:                        insights.append("♻️ Great regen braking — recovering energy!")
+        if not insights:                              insights.append("✅ All conditions optimal for maximum range!")
+
+        st.session_state['last_prediction'] = float(prediction)
+        st.session_state['last_insights']   = insights
+
+    with right:
+        # 1. TOP: Prediction Result Box & Insights
+        st.markdown('<div class="section-label">🎯 Prediction Result</div>', unsafe_allow_html=True)
+
+        if 'last_prediction' in st.session_state:
+            prediction  = st.session_state['last_prediction']
+            insights    = st.session_state['last_insights']
+            range_color = "#00ff9d" if prediction > 150 else "#ffaa00" if prediction > 60 else "#ff4444"
+
+            st.markdown(f"""
+            <div class="result-box" style="border-color:{range_color};box-shadow:0 0 30px {range_color}33;">
+                <div style="font-family:'Orbitron',monospace;font-size:0.7rem;letter-spacing:0.2em;color:#7a9bbf;margin-bottom:0.5rem;">
+                    ESTIMATED REMAINING RANGE
+                </div>
+                <div class="result-km" style="color:{range_color};">{prediction:.1f}</div>
+                <div class="result-label">KILOMETERS</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            for ins in insights:
+                st.markdown(f'<div class="insight-card">{ins}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="insight-card" style="text-align:center;padding:1.4rem 1rem;color:#7a9bbf;border-style:dashed;">
+                ⚡ Select vehicle status on the left and click <b>CALCULATE REMAINING RANGE</b> to estimate.
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 2. MIDDLE: Live Condition Check
+        st.markdown('<div class="section-label">🟢 Live Condition Check</div>', unsafe_allow_html=True)
         conditions = [
             ("🔋 Battery",      battery_soc > 20,
              f"{battery_soc}% — Good charge level",
@@ -365,51 +398,34 @@ with tab_predictor:
                 f'<div class="insight-card {css}">{icon} <b style="color:{color}">{label}:</b> {text}</div>',
                 unsafe_allow_html=True)
 
-        # ── Prediction Calculation & Persistence ──
-        if predict_btn:
-            ds = driving_styles.index(driving_style)
-            td = traffic_densities.index(traffic_density)
-            feat_input = np.array([[battery_soc, speed, power_consumption, battery_health,
-                                     road_gradient, temperature, regen_braking, ds, td]])
-            prediction = model.predict(feat_input)[0]
+        st.markdown("<br>", unsafe_allow_html=True)
 
-            insights = []
-            if battery_soc < 20:                          insights.append("🔴 Low SoC — please charge soon.")
-            if power_consumption > 30:                    insights.append("⚠️ High power draw is reducing range.")
-            if temperature < 5:                           insights.append("🥶 Cold temperature reduces battery efficiency.")
-            if road_gradient > 10:                        insights.append("⛰️ Steep gradient is consuming more energy.")
-            if driving_style.strip().lower() == "aggressive": insights.append("🏎️ Aggressive driving drains battery faster.")
-            if regen_braking > 10:                        insights.append("♻️ Great regen braking — recovering energy!")
-            if not insights:                              insights.append("✅ All conditions optimal for maximum range!")
+        # 3. BOTTOM: Feature Importance
+        st.markdown('<div class="section-label">📊 Feature Importance</div>', unsafe_allow_html=True)
+        sorted_imp = sorted(importances.items(), key=lambda x: x[1], reverse=True)
+        imp_df = pd.DataFrame(sorted_imp, columns=["Feature", "Importance"])
+        imp_df["Feature"] = imp_df["Feature"].str.replace("_", " ").str.title()
 
-            st.session_state['last_prediction'] = float(prediction)
-            st.session_state['last_insights']   = insights
-
-        if 'last_prediction' in st.session_state:
-            prediction  = st.session_state['last_prediction']
-            insights    = st.session_state['last_insights']
-            range_color = "#00ff9d" if prediction > 150 else "#ffaa00" if prediction > 60 else "#ff4444"
-
-            st.markdown(f"""
-            <div class="result-box" style="border-color:{range_color};box-shadow:0 0 40px {range_color}33;">
-                <div style="font-family:'Orbitron',monospace;font-size:0.7rem;letter-spacing:0.2em;color:#7a9bbf;margin-bottom:0.5rem;">
-                    ESTIMATED REMAINING RANGE
-                </div>
-                <div class="result-km" style="color:{range_color};">{prediction:.1f}</div>
-                <div class="result-label">KILOMETERS</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown('<div class="section-label" style="margin-top:1rem;">💡 Insights</div>', unsafe_allow_html=True)
-            for ins in insights:
-                st.markdown(f'<div class="insight-card">{ins}</div>', unsafe_allow_html=True)
+        st.dataframe(
+            imp_df,
+            column_config={
+                "Importance": st.column_config.ProgressColumn(
+                    "Importance",
+                    format="%.4f",
+                    min_value=0.0,
+                    max_value=float(imp_df["Importance"].max()),
+                ),
+            },
+            use_container_width=True,
+            hide_index=True,
+            height=280,
+        )
 
 # ══════════════════════════════════════════════════════════════
 # TAB 2 — DATA EXPLORER
 # ══════════════════════════════════════════════════════════════
 with tab_explorer:
 
-    # ── Dataset Overview Stats ──
     st.markdown('<div class="section-label">🗃️ Dataset Overview</div>', unsafe_allow_html=True)
 
     s1, s2, s3, s4, s5 = st.columns(5)
@@ -427,19 +443,13 @@ with tab_explorer:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Raw Data Preview ──
     with st.expander("📋  Preview Raw Dataset", expanded=False):
         st.dataframe(df_raw.head(50), use_container_width=True, hide_index=True)
 
-    # ── Descriptive Statistics ──
     with st.expander("📈  Descriptive Statistics", expanded=False):
         st.dataframe(df_raw.describe().round(3), use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # ────────────────────────────────────────────────────────
-    # Analysis Charts — grouped by theme
-    # ────────────────────────────────────────────────────────
 
     # Group 1: Battery Analysis
     st.markdown('<div class="section-label">🔋 Battery Analysis</div>', unsafe_allow_html=True)
@@ -531,7 +541,6 @@ with tab_explorer:
         safe_show_image("time series over time.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Most affect range — full width
     st.markdown('<div class="chart-card"><div class="chart-title">Feature Pairplot — Most Affect on Range</div>', unsafe_allow_html=True)
     safe_show_image("most affect range.png")
     st.markdown('</div>', unsafe_allow_html=True)
