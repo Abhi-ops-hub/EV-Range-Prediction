@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -187,6 +188,13 @@ input[type="number"], .stSelectbox > div > div {
     border-radius: 8px !important;
 }
 
+/* ── Expander Styling ── */
+[data-testid="stExpander"] {
+    background-color: rgba(0,200,255,0.03) !important;
+    border: 1px solid rgba(0,200,255,0.15) !important;
+    border-radius: 10px !important;
+}
+
 /* ── Predict Button ── */
 .stButton > button {
     font-family: 'Orbitron', monospace !important;
@@ -235,6 +243,13 @@ def load_and_train():
     return model, le_driving.classes_.tolist(), le_traffic.classes_.tolist(), importances, df_raw
 
 model, driving_styles, traffic_densities, importances, df_raw = load_and_train()
+
+# Image helper with safety check
+def safe_show_image(filename):
+    if os.path.exists(filename):
+        st.image(filename, use_container_width=True)
+    else:
+        st.warning(f"Image not found: `{filename}`")
 
 # ────────────────────────────────────────────────────────────
 # Hero
@@ -309,9 +324,22 @@ with tab_predictor:
         sorted_imp = sorted(importances.items(), key=lambda x: x[1], reverse=True)
         imp_df = pd.DataFrame(sorted_imp, columns=["Feature", "Importance"])
         imp_df["Feature"] = imp_df["Feature"].str.replace("_", " ").str.title()
+        
+        # Native Streamlit column config - avoids Jinja2/Styler errors
         st.dataframe(
-            imp_df.style.bar(subset=["Importance"], color="#00c8ff").format({"Importance": "{:.4f}"}),
-            use_container_width=True, hide_index=True, height=320)
+            imp_df,
+            column_config={
+                "Importance": st.column_config.ProgressColumn(
+                    "Importance",
+                    format="%.4f",
+                    min_value=0.0,
+                    max_value=float(imp_df["Importance"].max()),
+                ),
+            },
+            use_container_width=True,
+            hide_index=True,
+            height=320,
+        )
 
         st.markdown('<div class="section-label" style="margin-top:1rem;">🟢 Live Condition Check</div>', unsafe_allow_html=True)
         conditions = [
@@ -337,13 +365,29 @@ with tab_predictor:
                 f'<div class="insight-card {css}">{icon} <b style="color:{color}">{label}:</b> {text}</div>',
                 unsafe_allow_html=True)
 
-        # ── Prediction Result ──
+        # ── Prediction Calculation & Persistence ──
         if predict_btn:
             ds = driving_styles.index(driving_style)
             td = traffic_densities.index(traffic_density)
             feat_input = np.array([[battery_soc, speed, power_consumption, battery_health,
                                      road_gradient, temperature, regen_braking, ds, td]])
             prediction = model.predict(feat_input)[0]
+
+            insights = []
+            if battery_soc < 20:                          insights.append("🔴 Low SoC — please charge soon.")
+            if power_consumption > 30:                    insights.append("⚠️ High power draw is reducing range.")
+            if temperature < 5:                           insights.append("🥶 Cold temperature reduces battery efficiency.")
+            if road_gradient > 10:                        insights.append("⛰️ Steep gradient is consuming more energy.")
+            if driving_style.strip().lower() == "aggressive": insights.append("🏎️ Aggressive driving drains battery faster.")
+            if regen_braking > 10:                        insights.append("♻️ Great regen braking — recovering energy!")
+            if not insights:                              insights.append("✅ All conditions optimal for maximum range!")
+
+            st.session_state['last_prediction'] = float(prediction)
+            st.session_state['last_insights']   = insights
+
+        if 'last_prediction' in st.session_state:
+            prediction  = st.session_state['last_prediction']
+            insights    = st.session_state['last_insights']
             range_color = "#00ff9d" if prediction > 150 else "#ffaa00" if prediction > 60 else "#ff4444"
 
             st.markdown(f"""
@@ -355,15 +399,6 @@ with tab_predictor:
                 <div class="result-label">KILOMETERS</div>
             </div>
             """, unsafe_allow_html=True)
-
-            insights = []
-            if battery_soc < 20:                          insights.append("🔴 Low SoC — please charge soon.")
-            if power_consumption > 30:                    insights.append("⚠️ High power draw is reducing range.")
-            if temperature < 5:                           insights.append("🥶 Cold temperature reduces battery efficiency.")
-            if road_gradient > 10:                        insights.append("⛰️ Steep gradient is consuming more energy.")
-            if driving_style.strip().lower() == "aggressive": insights.append("🏎️ Aggressive driving drains battery faster.")
-            if regen_braking > 10:                        insights.append("♻️ Great regen braking — recovering energy!")
-            if not insights:                              insights.append("✅ All conditions optimal for maximum range!")
 
             st.markdown('<div class="section-label" style="margin-top:1rem;">💡 Insights</div>', unsafe_allow_html=True)
             for ins in insights:
@@ -411,18 +446,12 @@ with tab_explorer:
     b1, b2 = st.columns(2)
     with b1:
         st.markdown('<div class="chart-card"><div class="chart-title">SoC vs Remaining Range</div>', unsafe_allow_html=True)
-        try:
-            st.image("soc vs remaining range.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: soc vs remaining range.png")
+        safe_show_image("soc vs remaining range.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with b2:
         st.markdown('<div class="chart-card"><div class="chart-title">Battery SOC vs Power Consumption</div>', unsafe_allow_html=True)
-        try:
-            st.image("Battery SOC vs Power Consumption.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Battery SOC vs Power Consumption.png")
+        safe_show_image("Battery SOC vs Power Consumption.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -432,35 +461,23 @@ with tab_explorer:
     p1, p2 = st.columns(2)
     with p1:
         st.markdown('<div class="chart-card"><div class="chart-title">Speed vs Power Consumption</div>', unsafe_allow_html=True)
-        try:
-            st.image("Speed vs Power Consumption.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Speed vs Power Consumption.png")
+        safe_show_image("Speed vs Power Consumption.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with p2:
         st.markdown('<div class="chart-card"><div class="chart-title">Power Consumption at Road Gradient</div>', unsafe_allow_html=True)
-        try:
-            st.image("Power consumption at road gradient.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Power consumption at road gradient.png")
+        safe_show_image("Power consumption at road gradient.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     p3, p4 = st.columns(2)
     with p3:
         st.markdown('<div class="chart-card"><div class="chart-title">Top Power Consumption at Speed</div>', unsafe_allow_html=True)
-        try:
-            st.image("Top power consumption at speed.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Top power consumption at speed.png")
+        safe_show_image("Top power consumption at speed.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with p4:
         st.markdown('<div class="chart-card"><div class="chart-title">Power Consumption by Driving Style</div>', unsafe_allow_html=True)
-        try:
-            st.image("power consumption by driving style.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: power consumption by driving style.png")
+        safe_show_image("power consumption by driving style.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -470,27 +487,18 @@ with tab_explorer:
     d1, d2 = st.columns(2)
     with d1:
         st.markdown('<div class="chart-card"><div class="chart-title">Driving Style vs Avg Power Consumption</div>', unsafe_allow_html=True)
-        try:
-            st.image("Driving Style vs Avg Power Consumption.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Driving Style vs Avg Power Consumption.png")
+        safe_show_image("Driving Style vs Avg Power Consumption.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with d2:
         st.markdown('<div class="chart-card"><div class="chart-title">Range Impact by Traffic Density</div>', unsafe_allow_html=True)
-        try:
-            st.image("Range impact by traffic density.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Range impact by traffic density.png")
+        safe_show_image("Range impact by traffic density.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     d3, _ = st.columns(2)
     with d3:
         st.markdown('<div class="chart-card"><div class="chart-title">Traffic Density Impact on Range</div>', unsafe_allow_html=True)
-        try:
-            st.image("Traffic density impact.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Traffic density impact.png")
+        safe_show_image("Traffic density impact.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -500,18 +508,12 @@ with tab_explorer:
     e1, e2 = st.columns(2)
     with e1:
         st.markdown('<div class="chart-card"><div class="chart-title">Temperature vs Remaining Range</div>', unsafe_allow_html=True)
-        try:
-            st.image("Temperature vs remaining range.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Temperature vs remaining range.png")
+        safe_show_image("Temperature vs remaining range.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with e2:
         st.markdown('<div class="chart-card"><div class="chart-title">Regenerative Braking vs Remaining Range</div>', unsafe_allow_html=True)
-        try:
-            st.image("regenerative braking vs remaining_range.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: regenerative braking vs remaining_range.png")
+        safe_show_image("regenerative braking vs remaining_range.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -521,26 +523,17 @@ with tab_explorer:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('<div class="chart-card"><div class="chart-title">Feature Correlation Heatmap</div>', unsafe_allow_html=True)
-        try:
-            st.image("Feature Correlation Heatmap.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: Feature Correlation Heatmap.png")
+        safe_show_image("Feature Correlation Heatmap.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c2:
         st.markdown('<div class="chart-card"><div class="chart-title">Remaining Range Over Time</div>', unsafe_allow_html=True)
-        try:
-            st.image("time series over time.png", use_container_width=True)
-        except Exception:
-            st.warning("Image not found: time series over time.png")
+        safe_show_image("time series over time.png")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Most affect range — full width
     st.markdown('<div class="chart-card"><div class="chart-title">Feature Pairplot — Most Affect on Range</div>', unsafe_allow_html=True)
-    try:
-        st.image("most affect range.png", use_container_width=True)
-    except Exception:
-        st.warning("Image not found: most affect range.png")
+    safe_show_image("most affect range.png")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────────
